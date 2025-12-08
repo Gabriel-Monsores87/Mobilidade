@@ -320,7 +320,109 @@ O diagrama de classes foi modelado em **PlantUML** e representa:
   - `mobilidade.entidades`
   - `mobilidade.servicos`
   - `mobilidade.excessoes`
-- Relações de herança, associações e multiplicidades entre as classes.
+
+Relações de herança, associações e multiplicidades entre as classes.
+Descrição do Diagrama de Classes – Sistema de Mobilidade Urbana
+
+1. Pacote mobilidade – Interface com o usuário
+
+A classe Main concentra a interface em modo texto do sistema. Ela possui dois atributos estáticos: um Scanner, utilizado para leitura de dados via console, e uma instância de ServicoCorridas, responsável pelas operações de negócio.
+
+O método main implementa um laço de menu, lendo a opção do usuário e delegando as ações para métodos privados como cadastrarPassageiro(), cadastrarMotorista(), solicitarCorrida(), iniciarCorrida(), finalizarCorrida() e avaliarCorrida(). A classe Main não contém regras de negócio complexas; sua função é apenas orquestrar a interação com o usuário e encaminhar as requisições para a camada de serviço, mantendo assim um bom acoplamento entre interface e lógica de domínio.
+
+2. Pacote mobilidade.entidades – Modelo de domínio
+
+No centro do modelo temos a classe abstrata Usuario, que representa os atributos comuns a todos os usuários do sistema: id, nome, cpf, email, telefone e senha. Além disso, Usuario mantém o controle das avaliações recebidas por meio dos atributos quantidadeAvaliacoes e somaAvaliacoes, bem como do método protegido adicionarAvaliacao(int nota) e do método público getMediaAvaliacoes(). A geração de id é feita por um atributo estático proximoId, ilustrando o uso de escopo de classe.
+
+As classes Passageiro e Motorista estendem Usuario, exemplificando o uso de herança.
+
+Passageiro adiciona atributos específicos, como pendentePagamento, saldoCarteira e uma lista de metodosPagamento (associação 1 para muitos com MetodoPagamento). Essa classe oferece operações para cadastrar métodos de pagamento, gerenciar o saldo da carteira e marcar ou regularizar pendências financeiras.
+
+Motorista inclui os atributos cnh, cnhValida, veiculoAtivo e status. Há uma associação 1–1 entre Motorista e Veiculo, que agrupa informações sobre placa, modelo, cor e ano do veículo. O atributo status utiliza o enum StatusMotorista, que indica se o motorista está ONLINE, OFFLINE ou EM_CORRIDA.
+
+A classe Corrida é a entidade central do sistema. Ela se associa a:
+
+um Passageiro;
+
+um Motorista;
+
+uma CategoriaCorrida (enum que define COMUM ou LUXO, cada uma com tarifaBase e valorPorKm);
+
+um MetodoPagamento (interface implementada por diferentes estratégias de pagamento).
+
+Além disso, Corrida possui atributos como origem, destino, distanciaKm, valorBase, valorDistancia, valorTotal e status, este último baseado no enum StatusCorrida (SOLICITADA, ACEITA, EM_ANDAMENTO, FINALIZADA, CANCELADA, PENDENTE_PAGAMENTO). Métodos como atribuirMotorista(), iniciarViagem(), finalizarViagem() e cancelar() controlam o ciclo de vida da corrida, lançando EstadoInvalidoDaCorridaException quando uma transição de estado é inconsistente com as regras de negócio.
+
+3. Métodos de pagamento e polimorfismo
+
+O sistema adota o padrão de projeto Strategy por meio da interface MetodoPagamento. Ela define o comportamento processarPagamento(BigDecimal valor, Passageiro passageiro) e o método getDescricao(). Três classes concretas implementam essa interface:
+
+PagamentoDinheiro – utiliza o saldo da carteira do passageiro, podendo lançar SaldoInsuficienteException quando o saldo é menor que o valor da corrida;
+
+PagamentoCartaoCredito – mantém numeroCartao, nomeTitular e limiteDisponivel, e pode lançar PagamentoRecusadoException se o limite for insuficiente;
+
+PagamentoPix – recebe uma chavePix e, na versão protótipo, sempre aprova o pagamento.
+
+Esse desenho evidencia o polimorfismo por interface: a classe Corrida e o ServicoCorridas não precisam conhecer o tipo concreto do pagamento, apenas invocam processarPagamento sobre a referência do tipo MetodoPagamento.
+
+4. Pacote mobilidade.servicos – Regras de negócio
+
+O pacote de serviços contém a classe genérica Repositorio<T> e a classe de orquestração ServicoCorridas.
+
+Repositorio<T> encapsula uma lista interna de itens e oferece operações básicas para adicionar e listar objetos. No diagrama simplificado, ele aparece como Repositorio, mas no código é utilizado com generics para armazenar Passageiro, Motorista e Corrida, demonstrando o uso de polimorfismo paramétrico.
+
+ServicoCorridas atua como uma “fachada” da lógica de domínio. Ela mantém três repositórios internos (para passageiros, motoristas e corridas) e disponibiliza métodos de alto nível, como:
+
+cadastrarPassageiro e cadastrarMotorista;
+
+consultas listarPassageiros, listarMotoristas, listarCorridas e buscas por ID;
+
+solicitarCorrida(...), que:
+
+verifica se o passageiro não possui pendências (PassageiroPendenteException);
+
+localiza um motorista com StatusMotorista.ONLINE (lançando NenhumMotoristaDisponivelException se não houver);
+
+cria uma nova Corrida, associa o motorista e armazena a instância;
+
+iniciarCorrida e finalizarCorrida, que delegam para os métodos da própria Corrida e, no caso da finalização, acionam o processamento de pagamento. Em caso de falha, a corrida é marcada como PENDENTE_PAGAMENTO e o passageiro passa a ter status de pendente.
+
+Com isso, ServicoCorridas centraliza as regras de negócio mais complexas, evitando que a interface (Main) manipule diretamente o estado das entidades.
+
+5. Pacote mobilidade.excessoes – Exceções personalizadas
+
+O pacote de exceções reúne as classes que estendem Exception e representam situações anômalas específicas do domínio:
+
+SaldoInsuficienteException;
+
+PagamentoRecusadoException;
+
+NenhumMotoristaDisponivelException;
+
+EstadoInvalidoDaCorridaException;
+
+PassageiroPendenteException;
+
+MotoristaInvalidoException.
+
+Essas exceções são lançadas pelas entidades e serviços quando alguma regra de negócio é violada (por exemplo, tentar iniciar uma corrida que não está aceita, ou um motorista com CNH inválida tentando ficar online), permitindo que a camada superior trate os erros de forma controlada, sem interromper o funcionamento do sistema.
+
+6. Conceitos de Orientação a Objetos evidenciados
+
+O diagrama de classes evidencia diversos conceitos da disciplina:
+
+Encapsulamento: atributos privados, acesso por getters e métodos de negócio que controlam alterações de estado (por exemplo, avaliação de usuários e mudança de status da corrida).
+
+Herança: Passageiro e Motorista especializam Usuario, reaproveitando atributos e comportamentos comuns.
+
+Polimorfismo:
+
+por interface, via MetodoPagamento e suas implementações;
+
+por sobrecarga de métodos, como nas duas versões de solicitarCorrida em ServicoCorridas.
+
+Associações e multiplicidades: relação 1–1 entre Motorista e Veiculo, 1–* entre Passageiro e MetodoPagamento, e associações entre Corrida e as demais entidades (Passageiro, Motorista, CategoriaCorrida, MetodoPagamento).
+
+Tratamento de exceções personalizadas: exceções de domínio modeladas como classes específicas, integradas ao fluxo normal do sistema.
 
 
 ---
